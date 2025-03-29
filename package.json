@@ -1,0 +1,32 @@
+{
+  "name": "auth-platform",
+  "version": "1.0.0",
+  "description": "Authentication Platform with Cloudflare Workers and Hono",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc",
+    "deploy": "wrangler publish"
+  },
+  "keywords": [
+    "auth",
+    "cloudflare",
+    "workers",
+    "hono",
+    "jwt",
+    "sso"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "hono": "^3.12.0",
+    "otplib": "^12.0.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20231218.0",
+    "@types/node": "^20.10.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "wrangler": "^3.22.0"
+  }
+}

@@ -1,0 +1,821 @@
+openapi: 3.0.3
+info:
+  title: 認証サービスAPI
+  description: |
+    認証、MFA（多要素認証）およびユーザー管理のための認証サービスAPI
+  version: 1.0.0
+servers:
+  - url: https://auth-platform.nyagato-eva.workers.dev
+    description: 本番環境
+  - url: https://auth-test-client.pages.dev
+    description: テスト環境
+
+tags:
+  - name: Auth
+    description: 認証操作（登録、ログイン、ログアウトなど）
+  - name: MFA
+    description: 多要素認証（MFA）関連の操作
+  - name: User
+    description: ユーザー情報の取得と管理
+  - name: System
+    description: システム関連のエンドポイント
+
+paths:
+  /:
+    get:
+      summary: ヘルスチェック
+      description: サービスの稼働状態を確認するためのエンドポイント
+      tags: [System]
+      responses:
+        '200':
+          description: サービスが正常に稼働している
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /register:
+    post:
+      summary: ユーザー登録
+      description: 新規ユーザーを登録するためのエンドポイント
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: ユーザー登録成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: ユーザー名またはメールアドレスが既に存在する
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userExists:
+                  value:
+                    error: 'このユーザー名は既に使用されています'
+                emailExists:
+                  value:
+                    error: 'このメールアドレスは既に使用されています'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /login:
+    post:
+      summary: ログイン
+      description: ユーザー認証を行い、JWTトークンを発行するエンドポイント。MFAが有効な場合は追加の認証が必要。
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: ログイン成功または追加認証が必要
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/LoginSuccessResponse'
+                  - $ref: '#/components/schemas/MFARequiredResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: 認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidCredentials:
+                  value:
+                    error: 'ユーザー名またはパスワードが無効です'
+                invalidTOTP:
+                  value:
+                    error: '無効な認証コードです。もう一度試してください。'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /logout:
+    post:
+      summary: ログアウト
+      description: ユーザーのセッションを終了するエンドポイント
+      tags: [Auth]
+      responses:
+        '200':
+          description: ログアウト成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "ログアウトしました"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /refresh:
+    post:
+      summary: トークンリフレッシュ
+      description: リフレッシュトークンを使用して新しいアクセストークンを取得するエンドポイント
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: トークンリフレッシュ成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: 無効なリフレッシュトークン
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: '無効なリフレッシュトークンです'
+        '404':
+          description: ユーザーが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'ユーザーが見つかりません'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/mfa/complete:
+    post:
+      summary: MFA認証の完了
+      description: MFAコードを検証してログインプロセスを完了するエンドポイント
+      tags: [MFA]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteMFARequest'
+      responses:
+        '200':
+          description: MFA認証成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: MFA認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidToken:
+                  value:
+                    error: '無効または期限切れの一時トークンです'
+                invalidCode:
+                  value:
+                    error: '無効な認証コードです。もう一度試してください。'
+        '404':
+          description: ユーザーが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'ユーザーが見つかりません'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login/recovery:
+    post:
+      summary: リカバリーコードでのログイン
+      description: MFAリカバリーコードを使用してログインするエンドポイント
+      tags: [MFA]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryLoginRequest'
+      responses:
+        '200':
+          description: リカバリーコード認証成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryLoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: 認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidCredentials:
+                  value:
+                    error: 'ユーザー名またはパスワードが無効です'
+                invalidRecoveryCode:
+                  value:
+                    error: '無効なリカバリーコードです'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/user:
+    get:
+      summary: ユーザー情報取得
+      description: 認証されたユーザーの情報を取得するエンドポイント
+      tags: [User]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: ユーザー情報取得成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/mfa/init:
+    post:
+      summary: MFA初期化
+      description: ユーザーのMFAを初期化するエンドポイント
+      tags: [MFA]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: MFA初期化成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitMFAResponse'
+        '400':
+          description: リクエストエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'MFAは既に有効です'
+                mfaEnabled: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: ユーザーが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'ユーザーが見つかりません'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/mfa/verify:
+    post:
+      summary: MFA検証と有効化
+      description: MFAを検証して有効化するエンドポイント
+      tags: [MFA]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyMFARequest'
+      responses:
+        '200':
+          description: MFA有効化成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyMFAResponse'
+        '400':
+          description: リクエストエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingCode:
+                  value:
+                    error: '認証コードは必須です'
+                notInitialized:
+                  value:
+                    error: 'MFA設定が初期化されていません'
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: '無効な認証コードです。もう一度試してください。'
+        '404':
+          description: ユーザーが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'ユーザーが見つかりません'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/mfa/disable:
+    post:
+      summary: MFA無効化
+      description: ユーザーのMFAを無効化するエンドポイント
+      tags: [MFA]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisableMFARequest'
+      responses:
+        '200':
+          description: MFA無効化成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisableMFAResponse'
+        '400':
+          description: リクエストエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingPassword:
+                  value:
+                    error: 'パスワードは必須です'
+                missingCode:
+                  value:
+                    error: '認証コードまたはリカバリーコードが必要です'
+                mfaNotEnabled:
+                  value:
+                    error: 'MFAは有効になっていません'
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidPassword:
+                  value:
+                    error: 'パスワードが無効です'
+                invalidCode:
+                  value:
+                    error: '認証に失敗しました。コードが無効です。'
+        '404':
+          description: ユーザーが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'ユーザーが見つかりません'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/mfa/recovery/regenerate:
+    post:
+      summary: リカバリーコード再生成
+      description: MFAリカバリーコードを再生成するエンドポイント
+      tags: [MFA]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegenerateRecoveryCodesRequest'
+      responses:
+        '200':
+          description: リカバリーコード再生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegenerateRecoveryCodesResponse'
+        '400':
+          description: リクエストエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingInput:
+                  value:
+                    error: 'TOTPコードとパスワードは必須です'
+                mfaNotEnabled:
+                  value:
+                    error: 'MFAは有効になっていません'
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidPassword:
+                  value:
+                    error: 'パスワードが無効です'
+                invalidCode:
+                  value:
+                    error: '無効な認証コードです'
+        '404':
+          description: ユーザーが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'ユーザーが見つかりません'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: 不正なリクエスト
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    Unauthorized:
+      description: 認証エラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: '認証が必要です'
+    
+    InternalServerError:
+      description: サーバーエラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: 'Internal Server Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: エラーメッセージ
+        message:
+          type: string
+          description: 詳細メッセージ（オプション）
+        stack:
+          type: string
+          description: スタックトレース（開発環境のみ）
+
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "ok"
+        message:
+          type: string
+          example: "Auth Service is running"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ユーザーID
+        username:
+          type: string
+          description: ユーザー名
+        email:
+          type: string
+          format: email
+          description: メールアドレス
+        roles:
+          type: array
+          items:
+            type: string
+          description: ユーザーロール
+        mfaEnabled:
+          type: boolean
+          description: MFAが有効かどうか
+        createdAt:
+          type: string
+          format: date-time
+          description: アカウント作成日時
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+        - email
+      properties:
+        username:
+          type: string
+          description: ユーザー名
+          minLength: 3
+        password:
+          type: string
+          description: パスワード
+          minLength: 8
+        email:
+          type: string
+          format: email
+          description: メールアドレス
+
+    RegisterResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "ユーザー登録が完了しました"
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            username:
+              type: string
+            email:
+              type: string
+              format: email
+            roles:
+              type: array
+              items:
+                type: string
+            createdAt:
+              type: string
+              format: date-time
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: ユーザー名
+        password:
+          type: string
+          description: パスワード
+        totpCode:
+          type: string
+          description: MFAコード（MFAが有効な場合のみ必要）
+
+    LoginSuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "ログインに成功しました"
+        accessToken:
+          type: string
+          description: アクセストークン
+        refreshToken:
+          type: string
+          description: リフレッシュトークン
+        user:
+          $ref: '#/components/schemas/User'
+
+    MFARequiredResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "MFA認証が必要です"
+        requireMFA:
+          type: boolean
+          example: true
+        mfaType:
+          type: string
+          example: "totp"
+        userId:
+          type: string
+          format: uuid
+        temporaryToken:
+          type: string
+          description: MFA完了のための一時トークン
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: リフレッシュトークン
+
+    RefreshTokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: 新しいアクセストークン
+        refreshToken:
+          type: string
+          description: 新しいリフレッシュトークン
+
+    CompleteMFARequest:
+      type: object
+      required:
+        - temporaryToken
+        - totpCode
+      properties:
+        temporaryToken:
+          type: string
+          description: MFA認証用の一時トークン
+        totpCode:
+          type: string
+          description: ユーザーが入力したMFAコード
+
+    RecoveryLoginRequest:
+      type: object
+      required:
+        - username
+        - password
+        - recoveryCode
+      properties:
+        username:
+          type: string
+          description: ユーザー名
+        password:
+          type: string
+          description: パスワード
+        recoveryCode:
+          type: string
+          description: リカバリーコード
+
+    RecoveryLoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "リカバリーコードを使用したログインに成功しました"
+        accessToken:
+          type: string
+          description: アクセストークン
+        refreshToken:
+          type: string
+          description: リフレッシュトークン
+        user:
+          $ref: '#/components/schemas/User'
+        recoveryCodeUsed:
+          type: boolean
+          example: true
+
+    UserResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        authenticated:
+          type: boolean
+          description: 認証状態
+
+    InitMFAResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "MFA設定の初期化が完了しました"
+        secret:
+          type: string
+          description: MFAシークレット
+        qrCodeUri:
+          type: string
+          description: QRコードのURI
+        setupPending:
+          type: boolean
+          example: true
+        debug:
+          type: string
+          description: デバッグ情報（開発環境のみ）
+
+    VerifyMFARequest:
+      type: object
+      required:
+        - totpCode
+      properties:
+        totpCode:
+          type: string
+          description: MFA検証用のTOTPコード
+
+    VerifyMFAResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "MFAが正常に有効化されました"
+        recoveryCodes:
+          type: array
+          items:
+            type: string
+          description: リカバリーコード一覧
+        mfaEnabled:
+          type: boolean
+          example: true
+
+    DisableMFARequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          description: 確認用パスワード
+        totpCode:
+          type: string
+          description: MFAコード
+        recoveryCode:
+          type: string
+          description: リカバリーコード（MFAコードの代わりに使用可能）
+
+    DisableMFAResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "MFAが正常に無効化されました"
+        mfaEnabled:
+          type: boolean
+          example: false
+
+    RegenerateRecoveryCodesRequest:
+      type: object
+      required:
+        - totpCode
+        - password
+      properties:
+        totpCode:
+          type: string
+          description: MFAコード
+        password:
+          type: string
+          description: 確認用パスワード
+
+    RegenerateRecoveryCodesResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "リカバリーコードが再生成されました"
+        recoveryCodes:
+          type: array
+          items:
+            type: string
+          description: 新しいリカバリーコード一覧

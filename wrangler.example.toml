@@ -1,0 +1,19 @@
+name = "auth-platform"
+main = "src/index.ts"
+compatibility_date = "2023-01-01"
+
+[build]
+command = "npm run build"
+
+[vars]
+JWT_SECRET = "YOUR_JWT_SECRET_HERE" # 本番環境では安全な方法で管理すること
+DEBUG = "true"                      # 開発環境のみtrueに設定
+
+# KVの設定（ユーザー情報保存用）
+[[kv_namespaces]]
+binding = "AUTH_STORE"
+id = "YOUR_KV_ID_HERE" # Cloudflareコンソールで作成したKVのIDを設定
+
+# 開発環境用のKV設定
+[dev]
+port = 8787
