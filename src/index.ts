@@ -37,10 +37,6 @@ app.use('*', cors({
   origin: [
     'https://auth-platform.nyagato-eva.workers.dev', 
     'https://auth-test-client.pages.dev',
-    'https://d7d52c3f.auth-test-client.pages.dev',
-    'https://ed971704.auth-test-client.pages.dev',
-    'https://8cc4e259.auth-test-client.pages.dev',
-    'https://4ec7de17.auth-test-client.pages.dev'
   ],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
