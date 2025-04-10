@@ -1,12 +1,15 @@
 {
   "name": "auth-platform",
   "version": "1.0.0",
-  "description": "Authentication Platform with Cloudflare Workers and Hono",
+  "description": "OpenID Connect Authentication Platform with Cloudflare Workers and Hono",
   "main": "dist/index.js",
   "scripts": {
     "dev": "wrangler dev",
     "build": "tsc",
-    "deploy": "wrangler publish"
+    "deploy": "wrangler publish",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "auth",
@@ -14,6 +17,8 @@
     "workers",
     "hono",
     "jwt",
+    "oidc",
+    "openid",
     "sso"
   ],
   "author": "",
@@ -25,8 +30,10 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20231218.0",
     "@types/node": "^20.10.5",
+    "@vitest/coverage-v8": "^1.2.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
+    "vitest": "^1.2.1",
     "wrangler": "^3.22.0"
   }
 }
